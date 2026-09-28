@@ -7,8 +7,8 @@ import concurrent.futures
 
 # --- APP UI SETUP ---
 st.set_page_config(page_title="Pro Market Scanner", page_icon="📈", layout="wide")
-st.markdown("<h1 style='text-align: center; color: #4CAF50;'>⚡ Institutional Market Screener</h1>", unsafe_allow_html=True)
-st.markdown("<h4 style='text-align: center;'>Live 6-Layer Strategy Scanner (Top 500 NSE Stocks)</h4>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #4CAF50;'>⚡ Institutional Market Screener & Tracker</h1>", unsafe_allow_html=True)
+st.markdown("<h4 style='text-align: center;'>Live 6-Layer Strategy Radar (Top 500 NSE Stocks)</h4>", unsafe_allow_html=True)
 st.write("---")
 
 # --- DATA FETCHING ---
@@ -33,7 +33,7 @@ def calculate_rsi(data, period=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
-# --- SCANNER LOGIC ---
+# --- SCANNER & TRACKER LOGIC ---
 def scan_stock(row):
     ticker = row['Yahoo_Ticker']
     symbol = row['SYMBOL']
@@ -43,6 +43,9 @@ def scan_stock(row):
 
         curr = data['Close'].iloc[-1]
         curr_vol = data['Volume'].iloc[-1]
+        high = data['High'].iloc[-1]
+        low = data['Low'].iloc[-1]
+        
         if curr < 20 or curr_vol < 10000: return None
 
         sma_20 = data['Close'].rolling(window=20).mean().iloc[-1]
@@ -64,13 +67,34 @@ def scan_stock(row):
             action = "🟢 STRONG BUY" if bullish else "🔴 STRONG SELL"
             tgt = curr + (atr * 3) if bullish else curr - (atr * 3)
             sl = curr - (atr * 1.5) if bullish else curr + (atr * 1.5)
-            return {"Stock": symbol, "Signal": action, "Entry Price": round(curr, 2), "Target": round(tgt, 2), "Stoploss": round(sl, 2), "Whale Volume": "🔥 Detected"}
+            
+            # --- LIVE SCOREBOARD STATUS LOGIC ---
+            status = "⏳ Active (Tracking)"
+            if bullish and high >= tgt:
+                status = "🎯 Target Hit"
+            elif bullish and low <= sl:
+                status = "🛑 SL Hit"
+            elif bearish and low <= tgt:
+                status = "🎯 Target Hit"
+            elif bearish and high >= sl:
+                status = "🛑 SL Hit"
+
+            return {
+                "Stock": symbol, 
+                "Signal": action, 
+                "Entry Price": round(curr, 2), 
+                "Live LTP": round(curr, 2),
+                "Target": round(tgt, 2), 
+                "Stoploss": round(sl, 2), 
+                "Status": status,
+                "Whale Volume": "🔥 Detected"
+            }
     except: return None
     return None
 
-# --- FRONTEND BUTTON ---
-if st.button("🚀 FIRE SCANNER NOW (Scan Live Market)", use_container_width=True):
-    st.info("Radar Active: Scanning 500 stocks in real-time... Please wait 10-15 seconds.")
+# --- FRONTEND DASHBOARD ---
+if st.button("🚀 FIRE SCANNER & UPDATE SCOREBOARD", use_container_width=True):
+    st.info("Radar Active: Scanning 500 stocks & updating live status... Please wait 10-15 seconds.")
     nse_stocks = get_nse_stocks()
     
     if nse_stocks.empty:
@@ -92,8 +116,8 @@ if st.button("🚀 FIRE SCANNER NOW (Scan Live Market)", use_container_width=Tru
                 progress_bar.progress(completed / total)
         
         if results:
-            st.success(f"✅ Scan Complete! Found {len(results)} perfect setups.")
+            st.success(f"✅ Scan Complete! Found {len(results)} setups with Live Status.")
             df_results = pd.DataFrame(results)
             st.dataframe(df_results, use_container_width=True)
         else:
-            st.warning("⏳ No stocks match the strict 6-layer strategy right now. Operators are quiet.")
+            st.warning("⏳ No setups matched the strict 6-layer strategy right now.")
